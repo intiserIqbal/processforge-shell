@@ -1,8 +1,8 @@
 # ProcessForge Shell
 
-![Repo Size](https://img.shields.io/github/repo-size/yourusername/processforge-shell)
-![Last Commit](https://img.shields.io/github/last-commit/yourusername/processforge-shell)
-![License](https://img.shields.io/github/license/yourusername/processforge-shell)
+![Repo Size](https://img.shields.io/github/repo-size/intiserIqbal/processforge-shell)
+![Last Commit](https://img.shields.io/github/last-commit/intiserIqbal/processforge-shell)
+![License](https://img.shields.io/github/license/intiserIqbal/processforge-shell)
 
 
 **ProcessForge Shell** is a minimal Unix-like command interpreter written in C that demonstrates core operating system concepts such as process creation, inter-process communication, and signal handling. The project is designed as a learning-focused systems programming exercise to explore how a shell interacts with the Linux kernel through low-level system calls.
