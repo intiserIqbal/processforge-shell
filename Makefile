@@ -1,11 +1,12 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -Werror -g -O0
-SRC=src/main.c src/shell.c
-OUT=build/myshell
+CFLAGS=-Wall -g
+
+SRC=src/main.c src/parser.c src/executor.c src/builtins.c src/signals.c
+OUT=build/processforge
 
 all:
 	mkdir -p build
-	$(CC) $(CFLAGS) $(SRC) -Iinclude -o $(OUT)
+	$(CC) $(CFLAGS) $(SRC) -o $(OUT)
 
 clean:
 	rm -rf build
