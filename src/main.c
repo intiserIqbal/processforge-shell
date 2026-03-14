@@ -7,7 +7,7 @@
 int main() {
 
     char input[MAX_INPUT];
-    Command cmd;
+    Pipeline p;
 
     setup_signal_handlers();
 
@@ -16,7 +16,7 @@ int main() {
 
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             // --- Option A: Full path ---
-             printf("processforge:%s$ ", cwd);
+            printf("processforge:%s$ ", cwd);
             // <end of Option A>
 
             // --- Option B: Cleaner prompt (just directory name) ---
@@ -38,12 +38,15 @@ int main() {
 
         input[strcspn(input, "\n")] = 0;
 
-        parse_input(input, &cmd);
+        p = parse_input(input);
 
-        if (cmd.args[0] == NULL)
-            continue;
-
-        execute_command(&cmd);
+        if (p.is_pipe) {
+            execute(&p); // handles pipe
+        } else {
+            if (p.left.args[0] == NULL)
+                continue;
+            execute_command(&p.left); // handles normal command
+        }
     }
 
     return 0;
