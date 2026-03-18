@@ -7,12 +7,18 @@
 typedef struct {
     char *args[MAX_ARGS];
     int background;
+
+    // Redirection fields
+    int redirect_in;
+    int redirect_out;
+    int append_out;
+    char *input_file;
+    char *output_file;
 } Command;
 
 typedef struct {
-    Command left;   // command before '|'
-    Command right;  // command after '|'
-    int is_pipe;    // 1 if pipe exists, 0 otherwise
+    Command commands[MAX_ARGS]; // supports multi-stage pipelines
+    int count;                  // number of commands in pipeline
 } Pipeline;
 
 Pipeline parse_input(char *input);
@@ -24,5 +30,7 @@ int builtin_help();
 int builtin_exit();
 
 void setup_signal_handlers();
+
+int execute_pipeline(Command *cmd1, Command *cmd2);
 
 #endif

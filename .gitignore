@@ -1,12 +1,45 @@
-# build artifacts
+# Build artifacts
 build/
 *.o
 *.out
 *.exe
 
-# editor
+# Compiled binary (fallback)
+processforge
+
+# Editor/IDE
 .vscode/
 .idea/
 
-# OS files
+# OS
 .DS_Store
+
+# Swap/temp
+*.swp
+*.swo
+*.bak
+
+# Logs
+*.log
+
+# Coverage/debug
+*.gcda
+*.gcno
+*.gch
+
+# Docker
+*.tar
+
+# Script temp
+*.sh~
+
+# Test runtime outputs
+tests/tmp/
+
+# Ignore stray test files in root
+file.txt
+in.txt
+out.txt
+input.txt
+output.txt
+test_redirect

@@ -1,13 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>   // for getcwd()
+#include <unistd.h>
 #include "../include/shell.h"
 
 int main() {
-
     char input[MAX_INPUT];
-    Pipeline p;
 
     setup_signal_handlers();
 
@@ -15,17 +13,7 @@ int main() {
         char cwd[1024];
 
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
-            // --- Option A: Full path ---
             printf("processforge:%s$ ", cwd);
-            // <end of Option A>
-
-            // --- Option B: Cleaner prompt (just directory name) ---
-            /*char *dir = strrchr(cwd, '/');
-            if (dir)
-                printf("processforge:%s$ ", dir + 1);
-            else
-                printf("processforge:%s$ ", cwd);*/
-            // <end of Option B>
         } else {
             perror("getcwd");
             printf("processforge$ ");
@@ -36,16 +24,23 @@ int main() {
         if (fgets(input, MAX_INPUT, stdin) == NULL)
             break;
 
-        input[strcspn(input, "\n")] = 0;
+        // Remove ONLY trailing newline
+        size_t len = strlen(input);
+        if (len > 0 && input[len - 1] == '\n') {
+            input[len - 1] = '\0';
+        }
 
-        p = parse_input(input);
+        // Optional: debug
+        // printf("DEBUG LINE: [%s]\n", input);
 
-        if (p.is_pipe) {
-            execute(&p); // handles pipe
-        } else {
-            if (p.left.args[0] == NULL)
-                continue;
-            execute_command(&p.left); // handles normal command
+        Pipeline p = parse_input(input);
+
+        if (p.count == 2) {
+            if (p.commands[0].args[0])
+                execute_pipeline(&p.commands[0], &p.commands[1]);
+        } else if (p.count == 1) {
+            if (p.commands[0].args[0])
+                execute_command(&p.commands[0]);
         }
     }
 
