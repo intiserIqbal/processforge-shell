@@ -1,88 +1,98 @@
 # ProcessForge Shell
 
-![Repo Size](https://img.shields.io/github/repo-size/intiserIqbal/processforge-shell)
-![Last Commit](https://img.shields.io/github/last-commit/intiserIqbal/processforge-shell)
-![License](https://img.shields.io/github/license/intiserIqbal/processforge-shell)
-
-
-**ProcessForge Shell** is a minimal Unix-like command interpreter written in C that demonstrates core operating system concepts such as process creation, inter-process communication, and signal handling. The project is designed as a learning-focused systems programming exercise to explore how a shell interacts with the Linux kernel through low-level system calls.
-
-Rather than relying on existing frameworks, this shell is built from scratch using fundamental Unix primitives like `fork()`, `execvp()`, `waitpid()`, `pipe()`, and `dup2()`. By implementing these mechanisms directly, the project provides practical insight into how real shells manage processes, execute programs, and coordinate communication between commands.
+`https://img.shields.io/github/repo-size/intiserIqbal/processforge-shell`
+`https://img.shields.io/github/last-commit/intiserIqbal/processforge-shell`
+`https://img.shields.io/github/license/intiserIqbal/processforge-shell`
 
 ---
 
-## Features
+## Introduction & Motivation
 
-The shell aims to support core functionality found in traditional Unix shells:
-
-* Execute external programs
-* Process creation using `fork()`
-* Program execution using `execvp()`
-* Process synchronization using `waitpid()`
-* Command pipelines using `pipe()`
-* Input and output redirection (`>`, `<`)
-* Background process execution (`&`)
-* Basic signal handling (e.g., `Ctrl+C`)
-
-These features demonstrate essential operating system mechanisms such as process lifecycle management and inter-process communication.
+**ProcessForge Shell** is a research‑driven, Unix‑like command interpreter implemented in C. It is designed to expose core shell mechanisms such as parsing, process creation, pipelines, redirection, and signal handling. Unlike typical student shells, ProcessForge emphasizes modularity and extensibility, making it suitable for experimentation with advanced OS features such as job control and custom scheduling.
 
 ---
 
 ## Project Structure
 
 ```
-processforge-shell
-│
+mini-shell/
 ├── src/
-│   ├── main.c
-│   └── shell.c
-│
+│   ├── main.c               # Entry point and shell loop (dynamic prompt, signal handling)
+│   ├── parser.c             # Command parsing and pipeline construction
+│   ├── executor.c           # Execution, redirection, globbing, and pipelines
+│   └── builtins.c           # Built-in commands
 ├── include/
-│   └── shell.h
-│
+│   └── shell.h              # Shared command/pipeline definitions
 ├── docs/
-│   └── architecture.md
-│
-├── build/
-│
+│   ├── architecture.md      # Architecture documentation
+│   ├── demo.md              # Demo steps and usage plan
+│   └── devlogs/             # Development logs
+├── scripts/
+│   └── install.sh           # Optional install helper
+├── tests/
+│   ├── test_builtins.sh     # Builtins test
+│   ├── test_pipes.sh        # Pipeline test
+│   ├── test_redirection.sh  # Redirection test
+│   ├── expected/            # Expected outputs
+│   ├── fixtures/            # Input fixtures
+│   └── temp/                # Temp files (gitignored)
+├── build/                   # Compiled binaries
 ├── Makefile
-├── README.md
+├── Dockerfile
 ├── LICENSE
-└── .gitignore
+└── README.md
 ```
-
-* **src/** – Core implementation files
-* **include/** – Header files defining interfaces
-* **docs/** – Project documentation and architecture notes
-* **build/** – Compiled binaries (ignored by Git)
 
 ---
 
-## Build Instructions
+## Current Implementation
 
-### Prerequisites
+- **Dynamic Prompt:** Interactive sessions show `processforge:/cwd>`; scripted tests suppress prompts for clean output.
+- **Parser:** Handles pipes (`|`), redirection (`<`, `>`, `>>`), background execution (`&`), and whitespace/newline cleanup.
+- **Executor:** 
+  - Builtins (`cd`, `help`, `exit`) handled directly.
+  - External commands launched with `fork()` + `execvp()`.
+  - Multi‑stage pipelines supported with `pipe()` + `dup2()`.
+  - Redirection applied per command.
+  - Globbing expands wildcards before execution.
+- **Signal Handling:** Custom SIGINT handler restores prompt gracefully.
+- **Tests:** Expanded to cover builtins, multi‑stage pipelines, and redirection (append/input).
 
-Install the required development tools:
+---
+
+## Key Features
+
+- **External Program Execution:** Launches binaries using `fork()` and `execvp()`.
+- **Multi‑Stage Pipelines:** Arbitrary‑length pipelines supported (`cmd1 | cmd2 | cmd3 | ...`).
+- **Input/Output Redirection:** Supports `<`, `>`, and `>>`.
+- **Background Execution:** Handles `&` for background jobs.
+- **Signal Handling:** Manages interrupts (Ctrl+C).
+- **Built‑in Commands:** Includes `cd`, `help`, and `exit`.
+- **Dynamic Prompt:** Shows current working directory in interactive mode.
+
+---
+
+## System Calls Used
+
+| System Call | Purpose           |
+| ----------- | ----------------- |
+| fork()      | Create process    |
+| execvp()    | Load program      |
+| waitpid()   | Synchronize child |
+| pipe()      | IPC (pipelines)   |
+| dup2()      | Redirection       |
+| open()      | Open files for redirection |
+| chdir()     | Change directory  |
+| getcwd()    | Current directory |
+| sigaction() | Install SIGINT handler |
+
+---
+
+## Build & Run
 
 ```bash
-sudo apt update
-sudo apt install build-essential make gdb valgrind
-```
-
-### Compile the project
-
-From the project root directory:
-
-```bash
-make
-```
-
-This builds the shell executable in the `build/` directory.
-
-### Run the shell
-
-```bash
-./build/myshell
+make clean && make
+./build/processforge
 ```
 
 ---
@@ -90,44 +100,38 @@ This builds the shell executable in the `build/` directory.
 ## Example Usage
 
 ```
-myshell> ls
-myshell> pwd
-myshell> cat file.txt
-myshell> ls | grep txt
-myshell> sleep 10 &
-myshell> exit
+processforge:/home/user/project> help
+processforge:/home/user/project> ls | grep .c | sort | wc -l
+processforge:/home/user/project> echo hello > out.txt
+processforge:/home/user/project> cat < out.txt
+processforge:/home/user/project> sleep 5 &
+processforge:/home/user/project> exit
 ```
 
 ---
 
-## Learning Goals
+## Tests
 
-This project explores several important systems programming topics:
-
-* Linux process model
-* System calls and kernel interaction
-* Inter-process communication (IPC)
-* File descriptor manipulation
-* Signal handling
-* Debugging with `gdb`
-* Memory analysis with `valgrind`
-
-The architecture is intentionally modular to mirror real shell implementations and encourage maintainable systems-level design.
+```bash
+./tests/test_builtins.sh
+./tests/test_redirection.sh
+./tests/test_pipes.sh
+```
 
 ---
 
-## Future Improvements
+## Research Directions
 
-Potential extensions include:
+ProcessForge is evolving into a research platform for studying OS concepts:
 
-* Command history
-* Job control
-* Tab completion
-* Advanced parsing and quoting support
-* Performance analysis of process creation and pipes
+- **Job Control:** Implement `jobs`, `fg`, `bg`, and `kill` with a job table.
+- **Scheduling Policies:** Add FCFS, SJF, and Round Robin schedulers for background jobs.
+- **Instrumentation:** Collect metrics (latency, turnaround time, resource usage).
+- **Prompt Extensions:** Show job count and scheduler policy in the prompt.
+- **Reproducibility:** Document experiments in `docs/` and expand automated test coverage.
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License**. See the `LICENSE` file for details.
+Licensed under the **MIT License**. See `LICENSE` for details.

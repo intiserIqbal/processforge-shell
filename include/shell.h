@@ -2,13 +2,14 @@
 #define SHELL_H
 
 #define MAX_INPUT 1024
-#define MAX_ARGS 64
+#define MAX_ARGS 64     // max arguments per command
+#define MAX_COMMANDS 64 // max commands per pipeline
 
-typedef struct {
+typedef struct
+{
     char *args[MAX_ARGS];
     int background;
 
-    // Redirection fields
     int redirect_in;
     int redirect_out;
     int append_out;
@@ -16,14 +17,15 @@ typedef struct {
     char *output_file;
 } Command;
 
-typedef struct {
-    Command commands[MAX_ARGS]; // supports multi-stage pipelines
-    int count;                  // number of commands in pipeline
+typedef struct
+{
+    Command commands[MAX_COMMANDS];
+    int count; // number of commands in the pipeline
 } Pipeline;
 
 Pipeline parse_input(char *input);
+void parse_command(char *input, Command *cmd);
 void execute_command(Command *cmd);
-void execute(Pipeline *pipeline);
 
 int builtin_cd(char **args);
 int builtin_help();
@@ -31,6 +33,6 @@ int builtin_exit();
 
 void setup_signal_handlers();
 
-int execute_pipeline(Command *cmd1, Command *cmd2);
+int execute_pipeline(Pipeline *pipeline);
 
 #endif

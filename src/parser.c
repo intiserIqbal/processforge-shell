@@ -2,7 +2,8 @@
 #include <string.h>
 #include "../include/shell.h"
 
-void parse_command(char *input, Command *cmd) {
+void parse_command(char *input, Command *cmd)
+{
     int arg_index = 0;
     char *token;
 
@@ -15,29 +16,37 @@ void parse_command(char *input, Command *cmd) {
 
     token = strtok(input, " \t\r\n");
 
-    while (token != NULL && arg_index < MAX_ARGS - 1) {
-
-        if (strcmp(token, "&") == 0) {
+    while (token != NULL && arg_index < MAX_ARGS - 1)
+    {
+        if (strcmp(token, "&") == 0)
+        {
             cmd->background = 1;
-
-        } else if (strcmp(token, "<") == 0) {
+        }
+        else if (strcmp(token, "<") == 0)
+        {
             cmd->redirect_in = 1;
             token = strtok(NULL, " \t\r\n");
-            if (token) cmd->input_file = token;
-
-        } else if (strcmp(token, ">") == 0) {
+            if (token)
+                cmd->input_file = token;
+        }
+        else if (strcmp(token, ">") == 0)
+        {
             cmd->redirect_out = 1;
             cmd->append_out = 0;
             token = strtok(NULL, " \t\r\n");
-            if (token) cmd->output_file = token;
-
-        } else if (strcmp(token, ">>") == 0) {
+            if (token)
+                cmd->output_file = token;
+        }
+        else if (strcmp(token, ">>") == 0)
+        {
             cmd->redirect_out = 1;
             cmd->append_out = 1;
             token = strtok(NULL, " \t\r\n");
-            if (token) cmd->output_file = token;
-
-        } else {
+            if (token)
+                cmd->output_file = token;
+        }
+        else
+        {
             token[strcspn(token, "\r\n")] = 0;
             cmd->args[arg_index++] = token;
         }
@@ -48,38 +57,31 @@ void parse_command(char *input, Command *cmd) {
     cmd->args[arg_index] = NULL;
 }
 
-Pipeline parse_input(char *input) {
+Pipeline parse_input(char *input)
+{
     Pipeline p;
     memset(&p, 0, sizeof(Pipeline));
 
-    int pipe_count = 0;
-    for (char *ptr = input; *ptr; ++ptr)
-        if (*ptr == '|') pipe_count++;
+    char *cmd_str = strtok(input, "|");
 
-    if (pipe_count > 1) {
-        fprintf(stderr, "Error: Only single-stage pipelines are supported.\n");
-        return p;
-    }
+    while (cmd_str != NULL && p.count < MAX_COMMANDS)
+    {
+        // trim leading spaces
+        while (*cmd_str == ' ')
+            cmd_str++;
 
-    char *pipe_pos = strchr(input, '|');
+        // trim trailing spaces
+        char *end = cmd_str + strlen(cmd_str) - 1;
+        while (end > cmd_str && *end == ' ')
+        {
+            *end = '\0';
+            end--;
+        }
 
-    if (pipe_pos) {
-        *pipe_pos = '\0';
-        char *right_cmd = pipe_pos + 1;
+        parse_command(cmd_str, &p.commands[p.count]);
+        p.count++;
 
-        while (*right_cmd == ' ') right_cmd++;
-
-        while (strlen(input) > 0 && input[strlen(input) - 1] == ' ')
-            input[strlen(input) - 1] = '\0';
-
-        parse_command(input, &p.commands[0]);
-        parse_command(right_cmd, &p.commands[1]);
-
-        p.count = 2;
-
-    } else {
-        parse_command(input, &p.commands[0]);
-        p.count = 1;
+        cmd_str = strtok(NULL, "|");
     }
 
     return p;

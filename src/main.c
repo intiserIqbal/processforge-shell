@@ -1,46 +1,67 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 #include "../include/shell.h"
 
-int main() {
-    char input[MAX_INPUT];
+void handle_sigint(int sig)
+{
+    (void)sig; // suppress unused warning
+    write(STDOUT_FILENO, "\nprocessforge> ", 16);
+}
 
+void setup_signal_handlers()
+{
+    struct sigaction sa;
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    sigaction(SIGINT, &sa, NULL);
+}
+
+int main()
+{
+    char input[MAX_INPUT];
     setup_signal_handlers();
 
-    while (1) {
-        char cwd[1024];
+    // Only show prompt if stdin is a terminal (interactive mode)
+    int show_prompt = isatty(STDIN_FILENO);
 
-        if (getcwd(cwd, sizeof(cwd)) != NULL) {
-            printf("processforge:%s$ ", cwd);
-        } else {
-            perror("getcwd");
-            printf("processforge$ ");
+    while (1)
+    {
+        if (show_prompt)
+        {
+            char cwd[1024];
+            if (getcwd(cwd, sizeof(cwd)) != NULL)
+            {
+                printf("processforge:%s> ", cwd);
+            }
+            else
+            {
+                printf("processforge> ");
+            }
+            fflush(stdout);
         }
-
-        fflush(stdout);
 
         if (fgets(input, MAX_INPUT, stdin) == NULL)
             break;
 
-        // Remove ONLY trailing newline
         size_t len = strlen(input);
-        if (len > 0 && input[len - 1] == '\n') {
+        if (len > 0 && input[len - 1] == '\n')
             input[len - 1] = '\0';
-        }
-
-        // Optional: debug
-        // printf("DEBUG LINE: [%s]\n", input);
 
         Pipeline p = parse_input(input);
 
-        if (p.count == 2) {
-            if (p.commands[0].args[0])
-                execute_pipeline(&p.commands[0], &p.commands[1]);
-        } else if (p.count == 1) {
-            if (p.commands[0].args[0])
-                execute_command(&p.commands[0]);
+        if (p.count == 1)
+        {
+            execute_command(&p.commands[0]);
+        }
+        else if (p.count > 1)
+        {
+            if (execute_pipeline(&p) < 0)
+                fprintf(stderr, "Error: Failed to execute pipeline\n");
         }
     }
 
