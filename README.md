@@ -112,10 +112,19 @@ processforge:/home/user/project> exit
 
 ## Tests
 
+Generated runtime test artifacts are placed in `tests/temp/`, while committed test inputs and expected outputs remain in `tests/fixtures/` and `tests/expected/`.
+
 ```bash
+make clean && make
 ./tests/test_builtins.sh
 ./tests/test_redirection.sh
 ./tests/test_pipes.sh
+```
+
+After running tests, `tests/temp/` may contain temporary files created by redirection tests. These files are intentionally isolated and can be removed manually with:
+
+```bash
+rm -rf tests/temp/*
 ```
 
 ---

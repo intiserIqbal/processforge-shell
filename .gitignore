@@ -34,12 +34,11 @@ processforge
 *.sh~
 
 # Test runtime outputs
-tests/tmp/
+tests/temp/
 
 # Ignore stray test files in root
-file.txt
-in.txt
-out.txt
-input.txt
-output.txt
-test_redirect
+/file.txt
+/in.txt
+/out.txt
+/input.txt
+/output.txt

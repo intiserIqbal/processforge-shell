@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "../include/shell.h"
+#include "../include/jobs.h"
 
-int builtin_cd(char **args) {
+int builtin_cd(char **args)
+{
 
-    if (args[1] == NULL) {
+    if (args[1] == NULL)
+    {
         fprintf(stderr, "cd: missing argument\n");
         return 1;
     }
@@ -16,7 +19,8 @@ int builtin_cd(char **args) {
     return 0;
 }
 
-int builtin_help() {
+int builtin_help()
+{
 
     printf("ProcessForge Shell\n");
     printf("Built-in commands:\n");
@@ -27,6 +31,14 @@ int builtin_help() {
     return 0;
 }
 
-int builtin_exit() {
+int builtin_exit()
+{
     exit(0);
+}
+
+int builtin_jobs(char **args)
+{
+    (void)args;
+    print_jobs();
+    return 0;
 }

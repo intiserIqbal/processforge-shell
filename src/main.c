@@ -4,26 +4,16 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+
 #include "../include/shell.h"
-
-void handle_sigint(int sig)
-{
-    (void)sig; // suppress unused warning
-    write(STDOUT_FILENO, "\nprocessforge> ", 16);
-}
-
-void setup_signal_handlers()
-{
-    struct sigaction sa;
-    sa.sa_handler = handle_sigint;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    sigaction(SIGINT, &sa, NULL);
-}
+#include "../include/jobs.h"
+#include "../include/signals.h"
 
 int main()
 {
     char input[MAX_INPUT];
+
+    init_jobs();
     setup_signal_handlers();
 
     // Only show prompt if stdin is a terminal (interactive mode)
@@ -52,11 +42,15 @@ int main()
         if (len > 0 && input[len - 1] == '\n')
             input[len - 1] = '\0';
 
+        char original_command[MAX_INPUT];
+        strncpy(original_command, input, MAX_INPUT - 1);
+        original_command[MAX_INPUT - 1] = '\0';
+
         Pipeline p = parse_input(input);
 
         if (p.count == 1)
         {
-            execute_command(&p.commands[0]);
+            execute_command(&p.commands[0], original_command);
         }
         else if (p.count > 1)
         {

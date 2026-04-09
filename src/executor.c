@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <signal.h>
 #include "../include/shell.h"
+#include "../include/jobs.h"
 #include <glob.h>
 
 void apply_redirection(Command *cmd)
@@ -58,7 +59,7 @@ void expand_glob(Command *cmd)
     globfree(&glob_result);
 }
 
-void execute_command(Command *cmd)
+void execute_command(Command *cmd, const char *original_command)
 {
     if (!cmd->args[0])
         return;
@@ -79,6 +80,11 @@ void execute_command(Command *cmd)
         builtin_exit();
         return;
     }
+    if (strcmp(cmd->args[0], "jobs") == 0)
+    {
+        builtin_jobs(cmd->args);
+        return;
+    }
 
     pid_t pid = fork();
     if (pid == 0)
@@ -86,6 +92,9 @@ void execute_command(Command *cmd)
         // Child
         signal(SIGINT, SIG_DFL);
         signal(SIGPIPE, SIG_DFL);
+
+        // CRITICAL: Set PGID in child to avoid race
+        setpgid(0, 0);
 
         expand_glob(cmd);
         apply_redirection(cmd);
@@ -96,8 +105,25 @@ void execute_command(Command *cmd)
     }
     else if (pid > 0)
     {
-        // Parent
-        waitpid(pid, NULL, 0);
+        if (setpgid(pid, pid) < 0 && errno != EACCES && errno != EPERM)
+            perror("setpgid");
+
+        if (cmd->background)
+        {
+            int job_id = add_job(pid, original_command, JOB_RUNNING);
+            if (job_id < 0)
+            {
+                fprintf(stderr, "jobs: job list full\n");
+            }
+            else
+            {
+                printf("[%d] %d\n", job_id, pid);
+            }
+        }
+        else
+        {
+            waitpid(pid, NULL, 0);
+        }
     }
     else
     {

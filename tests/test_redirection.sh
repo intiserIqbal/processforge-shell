@@ -1,17 +1,20 @@
 #!/bin/bash
+set -euo pipefail
+
+temp_dir="tests/temp"
+mkdir -p "$temp_dir"
+rm -f "$temp_dir/test.txt"
+
 echo "Testing redirection"
 
-# Output redirection
-printf "echo hello > test.txt\nexit\n" | ./build/processforge
-
+printf "echo hello > $temp_dir/test.txt\nexit\n" | ./build/processforge
 echo "Output file content:"
-cat test.txt
+cat "$temp_dir/test.txt"
 
-# Append redirection
-printf "echo world >> test.txt\nexit\n" | ./build/processforge
-
+printf "echo world >> $temp_dir/test.txt\nexit\n" | ./build/processforge
 echo "Appended file content:"
-cat test.txt
+cat "$temp_dir/test.txt"
 
-# Input redirection
-printf "cat < test.txt\nexit\n" | ./build/processforge
+printf "cat < $temp_dir/test.txt\nexit\n" | ./build/processforge
+
+rm -f "$temp_dir/test.txt"

@@ -25,11 +25,12 @@ typedef struct
 
 Pipeline parse_input(char *input);
 void parse_command(char *input, Command *cmd);
-void execute_command(Command *cmd);
+void execute_command(Command *cmd, const char *original_command);
 
 int builtin_cd(char **args);
 int builtin_help();
 int builtin_exit();
+int builtin_jobs(char **args);
 
 void setup_signal_handlers();
 
