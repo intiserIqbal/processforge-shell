@@ -9,11 +9,11 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 #include <string.h>
+#include <time.h>
 
+#include "../include/scheduler.h"
 #include "../include/shell.h"
 #include "../include/jobs.h"
-
-// ... rest of the file unchanged
 
 extern pid_t shell_pgid;
 
@@ -31,7 +31,7 @@ int builtin_cd(char **args)
 int builtin_help()
 {
     printf("ProcessForge Shell\n");
-    printf("Built-in commands: cd, help, exit, jobs, fg, bg, kill\n");
+    printf("Built-in commands: cd, help, exit, jobs, fg, bg, kill, sched\n");
     printf("Pipelines, redirections, globbing, job control supported.\n");
     return 0;
 }
@@ -44,7 +44,7 @@ int builtin_exit()
 
 int builtin_jobs(char **args)
 {
-    (void)args; // unused
+    (void)args;
     print_jobs();
     return 0;
 }
@@ -75,14 +75,12 @@ int builtin_fg(char **args)
         return 1;
     }
 
-    // Give terminal to the job's process group
     if (tcsetpgrp(STDIN_FILENO, job->pgid) < 0)
     {
         perror("tcsetpgrp");
         return 1;
     }
 
-    // Resume the entire process group
     if (kill(-job->pgid, SIGCONT) < 0)
     {
         perror("kill(SIGCONT)");
@@ -90,10 +88,8 @@ int builtin_fg(char **args)
         return 1;
     }
 
-    // Mark job as running (it will become foreground)
     job->state = JOB_RUNNING;
 
-    // Wait for the foreground job to stop or exit
     int status;
     pid_t w;
     do
@@ -104,22 +100,17 @@ int builtin_fg(char **args)
             perror("waitpid");
             break;
         }
-        // If the job was continued (SIGCONT), loop again and wait for stop/exit
     } while (w > 0 && WIFCONTINUED(status));
 
-    // After loop, job is either stopped or terminated
     if (w > 0 && WIFSTOPPED(status))
     {
         job->state = JOB_STOPPED;
-        // Terminal remains with job? No, we'll restore shell's terminal after this function
-        // But we must not remove job; it's still stopped.
     }
     else if (w > 0 && (WIFEXITED(status) || WIFSIGNALED(status)))
     {
         remove_job(job->pgid);
     }
 
-    // Restore terminal to shell
     if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0)
         perror("tcsetpgrp restore");
 
@@ -203,9 +194,81 @@ int builtin_kill(char **args)
         return 1;
     }
 
+    // Send the signal to the whole process group
     if (kill(-job->pgid, signum) < 0)
     {
+        if (errno == ESRCH)
+        {
+            fprintf(stderr, "kill: job %d already terminated (removing from table)\n", job_id);
+            remove_job(job->pgid);
+            return 0;
+        }
         perror("kill");
+        return 1;
+    }
+
+    printf("Signal %ld sent to job %d (pgid %d)\n", signum, job_id, job->pgid);
+
+    // For SIGTERM/SIGKILL, we should wait a bit and then try to reap
+    if (signum == SIGTERM || signum == SIGKILL)
+    {
+        // Give the kernel a moment to deliver the signal
+        struct timespec req = {0, 50000000}; // 50 ms
+        nanosleep(&req, NULL);
+
+        // Reap any dead child processes belonging to this job
+        int status;
+        pid_t pid;
+        int any_reaped = 0;
+        while ((pid = waitpid(-job->pgid, &status, WNOHANG)) > 0)
+        {
+            any_reaped = 1;
+            // Decrement active_processes in job (job may have been found already)
+            if (job && job->active_processes > 0)
+            {
+                job->active_processes--;
+            }
+        }
+        if (any_reaped && job && job->active_processes == 0)
+        {
+            fprintf(stderr, "kill: job %d terminated, cleaning up\n", job_id);
+            remove_job(job->pgid);
+            return 0;
+        }
+
+        // Fallback: force removal if the process group leader is gone
+        if (kill(job->pgid, 0) < 0 && errno == ESRCH)
+        {
+            fprintf(stderr, "kill: job %d appears dead, removing from table\n", job_id);
+            remove_job(job->pgid);
+            return 0;
+        }
+    }
+    return 0;
+}
+// ========== SCHEDULER BUILTIN ==========
+int builtin_sched(char **args)
+{
+    if (args[1] == NULL)
+    {
+        printf("Scheduler policy: %s\n", sched_get_policy_name());
+        return 0;
+    }
+    if (strcmp(args[1], "none") == 0)
+    {
+        scheduler_set_policy(SCHED_NONE);
+    }
+    else if (strcmp(args[1], "roundrobin") == 0)
+    {
+        scheduler_set_policy(SCHED_RR);
+    }
+    else if (strcmp(args[1], "priority") == 0)
+    {
+        scheduler_set_policy(SCHED_PRIO);
+    }
+    else
+    {
+        fprintf(stderr, "sched: unknown policy '%s'\n", args[1]);
         return 1;
     }
     return 0;

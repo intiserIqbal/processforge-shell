@@ -29,16 +29,18 @@ void parse_command(char *input, Command *cmd);
 
 // Execution
 void execute_command(Command *cmd, const char *original_command);
-int execute_pipeline(Pipeline *pipeline, const char *original_command); // updated signature
+int execute_pipeline(Pipeline *pipeline, const char *original_command);
 
 // Builtins
 int builtin_cd(char **args);
 int builtin_help();
 int builtin_exit();
 int builtin_jobs(char **args);
-int builtin_fg(char **args);   // new
-int builtin_bg(char **args);   // new
-int builtin_kill(char **args); // new
+int builtin_fg(char **args);
+int builtin_bg(char **args);
+int builtin_kill(char **args);
+int builtin_sched(char **args);
+int builtin_menu(char **args);
 
 // Signals
 void setup_signal_handlers();

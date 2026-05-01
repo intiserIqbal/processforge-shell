@@ -2,6 +2,7 @@
 #define JOBS_H
 
 #include <sys/types.h>
+#include <time.h>
 
 #define MAX_JOBS 64
 #define MAX_CMD_LEN 256
@@ -20,9 +21,21 @@ typedef struct
     char command[MAX_CMD_LEN];
     job_state_t state;
 
-    int total_processes;  // NEW
-    int active_processes; // NEW
+    int total_processes;  // number of processes in pipeline
+    int active_processes; // still running (not exited)
+
+    // Instrumentation fields (Day 7)
+    struct timespec start_time;
+    int logged;      // already logged in log file
+    int exit_status; // exit code or -signal
+
+    // Day 8: scheduler priority (higher number = higher priority)
+    int priority;
 } job_t;
+
+/* Global job table (non‑static for logging.c) */
+extern job_t jobs[MAX_JOBS];
+extern int job_count;
 
 void init_jobs();
 int add_job(pid_t pgid, const char *cmd, job_state_t state);

@@ -1,9 +1,12 @@
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include "../include/jobs.h"
 
-static job_t jobs[MAX_JOBS];
-static int job_count = 0;
+/* Global definitions (non‑static) */
+job_t jobs[MAX_JOBS];
+int job_count = 0;
 static int next_job_id = 1;
 
 void init_jobs()
@@ -29,6 +32,12 @@ int add_job(pid_t pgid, const char *cmd, job_state_t state)
 
     strncpy(job->command, cmd, MAX_CMD_LEN - 1);
     job->command[MAX_CMD_LEN - 1] = '\0';
+
+    /* Instrumentation */
+    clock_gettime(CLOCK_MONOTONIC, &job->start_time);
+    job->logged = 0;
+    job->exit_status = 0;
+    job->priority = 0; // default priority
 
     return job->id;
 }
@@ -90,9 +99,9 @@ void print_jobs()
             continue;
         }
 
-        const char *state_str =
-            jobs[i].state == JOB_RUNNING ? "Running" : jobs[i].state == JOB_STOPPED ? "Stopped"
-                                                                                    : "Done";
+        const char *state_str = (jobs[i].state == JOB_RUNNING)   ? "Running"
+                                : (jobs[i].state == JOB_STOPPED) ? "Stopped"
+                                                                 : "Done";
 
         printf("[%d] %s %s\n", jobs[i].id, state_str, jobs[i].command);
     }

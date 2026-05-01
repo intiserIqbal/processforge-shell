@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -Wextra -Werror -g -O0
 
-SRC=src/main.c src/parser.c src/executor.c src/builtins.c src/jobs.c src/signals.c
+SRC=src/main.c src/parser.c src/executor.c src/builtins.c src/jobs.c src/signals.c src/logging.c src/scheduler.c
 OUT=build/processforge
 
 all:

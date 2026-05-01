@@ -9,9 +9,13 @@
 #include <errno.h>
 #include <signal.h>
 #include <glob.h>
+#include <sys/resource.h>
+#include <time.h>
 
 #include "../include/shell.h"
 #include "../include/jobs.h"
+#include "../include/logging.h"
+#include "../include/scheduler.h"
 
 extern pid_t shell_pgid;
 
@@ -119,7 +123,11 @@ void execute_command(Command *cmd, const char *original_command)
         builtin_kill(cmd->args);
         return;
     }
-
+    if (strcmp(cmd->args[0], "sched") == 0)
+    {
+        builtin_sched(cmd->args);
+        return;
+    }
     pid_t pid = fork();
 
     if (pid == 0)
@@ -148,12 +156,20 @@ void execute_command(Command *cmd, const char *original_command)
             if (job_id < 0)
                 fprintf(stderr, "jobs: job list full\n");
             else
+            {
                 printf("[%d] %d\n", job_id, pid);
+                // Add this background job to the scheduler
+                job_t *job = find_job_by_pgid(pid);
+                if (job)
+                    scheduler_add_job(job);
+            }
         }
         else
         {
-            int status;
+            struct timespec start_time;
+            clock_gettime(CLOCK_MONOTONIC, &start_time);
 
+            int status;
             if (tcsetpgrp(STDIN_FILENO, pid) < 0)
                 perror("tcsetpgrp");
 
@@ -165,7 +181,25 @@ void execute_command(Command *cmd, const char *original_command)
             if (WIFSTOPPED(status))
             {
                 int job_id = add_job(pid, original_command, JOB_STOPPED);
+                if (job_id >= 0)
+                {
+                    job_t *job = find_job_by_pgid(pid);
+                    if (job)
+                        job->start_time = start_time;
+                }
                 printf("\n[%d] Stopped %s\n", job_id, original_command);
+            }
+            else
+            {
+                /* Job finished – log it */
+                struct rusage ru;
+                getrusage(RUSAGE_CHILDREN, &ru);
+                int exit_status = 0;
+                if (WIFEXITED(status))
+                    exit_status = WEXITSTATUS(status);
+                else if (WIFSIGNALED(status))
+                    exit_status = -WTERMSIG(status);
+                log_job_finish(pid, original_command, exit_status, &ru, &start_time);
             }
         }
     }
@@ -286,17 +320,23 @@ int execute_pipeline(Pipeline *pipeline, const char *original_command)
             {
                 job->total_processes = num_commands;
                 job->active_processes = num_commands;
+                // Add this background job to the scheduler
+                scheduler_add_job(job);
             }
             printf("[%d] %d\n", job_id, pgid);
         }
     }
     else // foreground pipeline
     {
+        struct timespec start_time;
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
+
         if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
             perror("tcsetpgrp (pipeline)");
 
         int status;
         int alive = num_commands;
+        int last_status = 0;
 
         while (alive > 0)
         {
@@ -311,7 +351,10 @@ int execute_pipeline(Pipeline *pipeline, const char *original_command)
                 break;
             }
             if (WIFEXITED(status) || WIFSIGNALED(status))
+            {
                 alive--;
+                last_status = status; // keep last process's status
+            }
             else if (WIFSTOPPED(status))
                 break;
         }
@@ -329,9 +372,28 @@ int execute_pipeline(Pipeline *pipeline, const char *original_command)
                 {
                     job->total_processes = num_commands;
                     job->active_processes = num_commands;
+                    job->start_time = start_time;
                 }
                 printf("\n[%d] Stopped %s\n", job_id, original_command);
             }
+        }
+        else
+        {
+            /* Job finished – log */
+            struct rusage ru;
+            getrusage(RUSAGE_CHILDREN, &ru);
+            int exit_status = 0;
+            if (WIFEXITED(last_status))
+                exit_status = WEXITSTATUS(last_status);
+            else if (WIFSIGNALED(last_status))
+                exit_status = -WTERMSIG(last_status);
+
+            /* Find the job and mark as logged (prevent deferred logging) */
+            job_t *job = find_job_by_pgid(pgid);
+            if (job)
+                job->logged = 1; // we log it now, avoid duplicate from signal handler
+
+            log_job_finish(pgid, original_command, exit_status, &ru, &start_time);
         }
     }
 

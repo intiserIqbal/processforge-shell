@@ -9,6 +9,8 @@
 
 #include "../include/jobs.h"
 #include "../include/signals.h"
+#include "../include/logging.h"   // for enqueue_deferred_log
+#include "../include/scheduler.h" // NEW
 
 /*
  * SIGCHLD handler
@@ -35,19 +37,33 @@ static void handle_sigchld(int sig)
 
         if (WIFEXITED(status) || WIFSIGNALED(status))
         {
+            /* Record exit status */
+            if (WIFEXITED(status))
+                job->exit_status = WEXITSTATUS(status);
+            else if (WIFSIGNALED(status))
+                job->exit_status = -WTERMSIG(status); // negative means signal
+
             if (job->active_processes > 0)
                 job->active_processes--;
 
             if (job->active_processes == 0)
+            {
                 job->state = JOB_DONE;
+                /* Defer logging – we are inside signal handler, cannot write to file */
+                enqueue_deferred_log(job->pgid);
+                /* Remove this finished job from the scheduler */
+                scheduler_remove_job(job->pgid);
+            }
         }
         else if (WIFSTOPPED(status))
         {
             job->state = JOB_STOPPED;
+            /* Do NOT remove from scheduler – it may be resumed later */
         }
         else if (WIFCONTINUED(status))
         {
             job->state = JOB_RUNNING;
+            /* Scheduler will handle it via its policy */
         }
     }
 
