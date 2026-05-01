@@ -24,6 +24,9 @@ int add_job(pid_t pgid, const char *cmd, job_state_t state)
     job->pgid = pgid;
     job->state = state;
 
+    job->total_processes = 1;
+    job->active_processes = 1;
+
     strncpy(job->command, cmd, MAX_CMD_LEN - 1);
     job->command[MAX_CMD_LEN - 1] = '\0';
 
@@ -83,12 +86,14 @@ void print_jobs()
         {
             printf("[%d] Done %s\n", jobs[i].id, jobs[i].command);
             remove_job(jobs[i].pgid);
-            i--; // adjust index after removal
+            i--;
             continue;
         }
+
         const char *state_str =
             jobs[i].state == JOB_RUNNING ? "Running" : jobs[i].state == JOB_STOPPED ? "Stopped"
                                                                                     : "Done";
+
         printf("[%d] %s %s\n", jobs[i].id, state_str, jobs[i].command);
     }
 }

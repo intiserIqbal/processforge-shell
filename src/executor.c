@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -6,9 +8,12 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <signal.h>
+#include <glob.h>
+
 #include "../include/shell.h"
 #include "../include/jobs.h"
-#include <glob.h>
+
+extern pid_t shell_pgid;
 
 void apply_redirection(Command *cmd)
 {
@@ -20,7 +25,12 @@ void apply_redirection(Command *cmd)
             fprintf(stderr, "%s: %s\n", cmd->input_file, strerror(errno));
             _exit(1);
         }
-        dup2(fd, STDIN_FILENO);
+        if (dup2(fd, STDIN_FILENO) < 0)
+        {
+            perror("dup2 stdin");
+            close(fd);
+            _exit(1);
+        }
         close(fd);
     }
 
@@ -35,7 +45,12 @@ void apply_redirection(Command *cmd)
             perror("output file");
             _exit(1);
         }
-        dup2(fd, STDOUT_FILENO);
+        if (dup2(fd, STDOUT_FILENO) < 0)
+        {
+            perror("dup2 stdout");
+            close(fd);
+            _exit(1);
+        }
         close(fd);
     }
 }
@@ -47,14 +62,19 @@ void expand_glob(Command *cmd)
 
     for (int i = 0; cmd->args[i] != NULL; i++)
     {
-        glob(cmd->args[i], GLOB_NOCHECK | (i > 0 ? GLOB_APPEND : 0), NULL, &glob_result);
+        glob(cmd->args[i],
+             GLOB_NOCHECK | (i > 0 ? GLOB_APPEND : 0),
+             NULL,
+             &glob_result);
     }
 
-    for (size_t i = 0; i < glob_result.gl_pathc; i++)
-    {
+    size_t count = glob_result.gl_pathc;
+    if (count >= MAX_ARGS)
+        count = MAX_ARGS - 1;
+
+    for (size_t i = 0; i < count; i++)
         cmd->args[i] = strdup(glob_result.gl_pathv[i]);
-    }
-    cmd->args[glob_result.gl_pathc] = NULL;
+    cmd->args[count] = NULL;
 
     globfree(&glob_result);
 }
@@ -64,7 +84,6 @@ void execute_command(Command *cmd, const char *original_command)
     if (!cmd->args[0])
         return;
 
-    // Builtins
     if (strcmp(cmd->args[0], "cd") == 0)
     {
         builtin_cd(cmd->args);
@@ -85,15 +104,30 @@ void execute_command(Command *cmd, const char *original_command)
         builtin_jobs(cmd->args);
         return;
     }
+    if (strcmp(cmd->args[0], "fg") == 0)
+    {
+        builtin_fg(cmd->args);
+        return;
+    }
+    if (strcmp(cmd->args[0], "bg") == 0)
+    {
+        builtin_bg(cmd->args);
+        return;
+    }
+    if (strcmp(cmd->args[0], "kill") == 0)
+    {
+        builtin_kill(cmd->args);
+        return;
+    }
 
     pid_t pid = fork();
+
     if (pid == 0)
     {
-        // Child
         signal(SIGINT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
         signal(SIGPIPE, SIG_DFL);
 
-        // CRITICAL: Set PGID in child to avoid race
         setpgid(0, 0);
 
         expand_glob(cmd);
@@ -112,17 +146,27 @@ void execute_command(Command *cmd, const char *original_command)
         {
             int job_id = add_job(pid, original_command, JOB_RUNNING);
             if (job_id < 0)
-            {
                 fprintf(stderr, "jobs: job list full\n");
-            }
             else
-            {
                 printf("[%d] %d\n", job_id, pid);
-            }
         }
         else
         {
-            waitpid(pid, NULL, 0);
+            int status;
+
+            if (tcsetpgrp(STDIN_FILENO, pid) < 0)
+                perror("tcsetpgrp");
+
+            waitpid(pid, &status, WUNTRACED);
+
+            if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0)
+                perror("tcsetpgrp");
+
+            if (WIFSTOPPED(status))
+            {
+                int job_id = add_job(pid, original_command, JOB_STOPPED);
+                printf("\n[%d] Stopped %s\n", job_id, original_command);
+            }
         }
     }
     else
@@ -131,61 +175,165 @@ void execute_command(Command *cmd, const char *original_command)
     }
 }
 
-int execute_pipeline(Pipeline *pipeline)
+int execute_pipeline(Pipeline *pipeline, const char *original_command)
 {
     int num_commands = pipeline->count;
-    int pipefds[2 * (num_commands - 1)];
-    pid_t pids[num_commands];
+    if (num_commands <= 1)
+        return -1;
 
-    // Create pipes
+    int (*pipefds)[2] = malloc((num_commands - 1) * sizeof(*pipefds));
+    if (!pipefds)
+    {
+        perror("malloc");
+        return -1;
+    }
+
     for (int i = 0; i < num_commands - 1; i++)
     {
-        if (pipe(pipefds + i * 2) < 0)
+        if (pipe(pipefds[i]) < 0)
         {
             perror("pipe");
+            for (int j = 0; j < i; j++)
+            {
+                close(pipefds[j][0]);
+                close(pipefds[j][1]);
+            }
+            free(pipefds);
             return -1;
         }
     }
 
-    // Fork processes
+    pid_t first_pid = 0;
+    int is_background = pipeline->commands[0].background;
+
     for (int i = 0; i < num_commands; i++)
     {
-        pids[i] = fork();
-        if (pids[i] < 0)
+        pid_t pid = fork();
+        if (pid < 0)
         {
             perror("fork");
+            for (int j = 0; j < num_commands - 1; j++)
+            {
+                close(pipefds[j][0]);
+                close(pipefds[j][1]);
+            }
+            free(pipefds);
             return -1;
         }
 
-        if (pids[i] == 0)
+        if (pid == 0) // child
         {
-            // Child process
-            if (i > 0)
-                dup2(pipefds[(i - 1) * 2], STDIN_FILENO);
-            if (i < num_commands - 1)
-                dup2(pipefds[i * 2 + 1], STDOUT_FILENO);
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
+            signal(SIGPIPE, SIG_DFL);
 
-            // Close all pipes
-            for (int j = 0; j < 2 * (num_commands - 1); j++)
-                close(pipefds[j]);
+            if (first_pid == 0)
+                setpgid(0, 0);
+            else
+                setpgid(0, first_pid);
+
+            if (i > 0 && dup2(pipefds[i - 1][0], STDIN_FILENO) < 0)
+            {
+                perror("dup2 stdin");
+                _exit(1);
+            }
+            if (i < num_commands - 1 && dup2(pipefds[i][1], STDOUT_FILENO) < 0)
+            {
+                perror("dup2 stdout");
+                _exit(1);
+            }
+
+            for (int j = 0; j < num_commands - 1; j++)
+            {
+                close(pipefds[j][0]);
+                close(pipefds[j][1]);
+            }
 
             expand_glob(&pipeline->commands[i]);
             apply_redirection(&pipeline->commands[i]);
 
             execvp(pipeline->commands[i].args[0], pipeline->commands[i].args);
             perror("execvp");
-            exit(EXIT_FAILURE);
+            _exit(1);
+        }
+        else // parent
+        {
+            if (first_pid == 0)
+                first_pid = pid;
+            if (setpgid(pid, first_pid) < 0 && errno != EPERM && errno != EACCES)
+                perror("setpgid");
         }
     }
 
-    // Close all pipes in parent
-    for (int i = 0; i < 2 * (num_commands - 1); i++)
-        close(pipefds[i]);
+    for (int i = 0; i < num_commands - 1; i++)
+    {
+        close(pipefds[i][0]);
+        close(pipefds[i][1]);
+    }
+    free(pipefds);
 
-    // Wait for all processes
-    int status;
-    for (int i = 0; i < num_commands; i++)
-        waitpid(pids[i], &status, 0);
+    pid_t pgid = first_pid;
 
-    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (is_background)
+    {
+        int job_id = add_job(pgid, original_command, JOB_RUNNING);
+        if (job_id < 0)
+            fprintf(stderr, "jobs: job list full\n");
+        else
+        {
+            job_t *job = find_job_by_pgid(pgid);
+            if (job)
+            {
+                job->total_processes = num_commands;
+                job->active_processes = num_commands;
+            }
+            printf("[%d] %d\n", job_id, pgid);
+        }
+    }
+    else // foreground pipeline
+    {
+        if (tcsetpgrp(STDIN_FILENO, pgid) < 0)
+            perror("tcsetpgrp (pipeline)");
+
+        int status;
+        int alive = num_commands;
+
+        while (alive > 0)
+        {
+            pid_t wpid = waitpid(-pgid, &status, WUNTRACED | WCONTINUED);
+            if (wpid < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                if (errno == ECHILD) // all children already reaped by SIGCHLD
+                    break;
+                perror("waitpid");
+                break;
+            }
+            if (WIFEXITED(status) || WIFSIGNALED(status))
+                alive--;
+            else if (WIFSTOPPED(status))
+                break;
+        }
+
+        if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0)
+            perror("tcsetpgrp (shell)");
+
+        if (WIFSTOPPED(status))
+        {
+            int job_id = add_job(pgid, original_command, JOB_STOPPED);
+            if (job_id >= 0)
+            {
+                job_t *job = find_job_by_pgid(pgid);
+                if (job)
+                {
+                    job->total_processes = num_commands;
+                    job->active_processes = num_commands;
+                }
+                printf("\n[%d] Stopped %s\n", job_id, original_command);
+            }
+        }
+    }
+
+    return 0;
 }

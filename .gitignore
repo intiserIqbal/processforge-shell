@@ -10,7 +10,7 @@ processforge
 # Editor/IDE
 .vscode/
 .idea/
-
+/.continue
 # OS
 .DS_Store
 
