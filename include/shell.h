@@ -35,12 +35,15 @@ int execute_pipeline(Pipeline *pipeline, const char *original_command);
 int builtin_cd(char **args);
 int builtin_help();
 int builtin_exit();
+int builtin_quit(char **args);
 int builtin_jobs(char **args);
 int builtin_fg(char **args);
 int builtin_bg(char **args);
 int builtin_kill(char **args);
 int builtin_sched(char **args);
 int builtin_menu(char **args);
+int builtin_prio(char **args);
+int builtin_log(char **args);
 
 // Signals
 void setup_signal_handlers();

@@ -103,6 +103,11 @@ void execute_command(Command *cmd, const char *original_command)
         builtin_exit();
         return;
     }
+    if (strcmp(cmd->args[0], "quit") == 0)
+    {
+        builtin_quit(cmd->args);
+        return;
+    }
     if (strcmp(cmd->args[0], "jobs") == 0)
     {
         builtin_jobs(cmd->args);
@@ -126,6 +131,22 @@ void execute_command(Command *cmd, const char *original_command)
     if (strcmp(cmd->args[0], "sched") == 0)
     {
         builtin_sched(cmd->args);
+        return;
+    }
+    /* NEW: menu and prio built-ins */
+    if (strcmp(cmd->args[0], "menu") == 0)
+    {
+        builtin_menu(cmd->args);
+        return;
+    }
+    if (strcmp(cmd->args[0], "prio") == 0)
+    {
+        builtin_prio(cmd->args);
+        return;
+    }
+    if (strcmp(cmd->args[0], "log") == 0)
+    {
+        builtin_log(cmd->args);
         return;
     }
     pid_t pid = fork();

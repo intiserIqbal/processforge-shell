@@ -90,6 +90,12 @@ void scheduler_set_policy(enum sched_policy pol)
     rebalance_scheduler();
 }
 
+/* NEW: Return current policy */
+int scheduler_get_policy(void)
+{
+    return current_policy;
+}
+
 const char *sched_get_policy_name(void)
 {
     switch (current_policy)

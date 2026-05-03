@@ -31,7 +31,7 @@ int init_logging(const char *log_path)
         return -1;
     }
     setvbuf(log_file, NULL, _IOLBF, 0);
-    fprintf(stderr, "Logging enabled: %s\n", path);
+    //fprintf(stderr, "Logging enabled: %s\n", path);
     return 0;
 }
 
