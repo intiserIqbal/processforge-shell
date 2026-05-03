@@ -86,32 +86,32 @@ int builtin_fg(char **args)
         fprintf(stderr, "fg: job %d not found\n", job_id);
         return 1;
     }
-    if (job->state != JOB_STOPPED)
-    {
-        fprintf(stderr, "fg: job %d is not stopped\n", job_id);
-        return 1;
-    }
 
+    /* Bring job to foreground */
     if (tcsetpgrp(STDIN_FILENO, job->pgid) < 0)
     {
         perror("tcsetpgrp");
         return 1;
     }
 
-    if (kill(-job->pgid, SIGCONT) < 0)
+    /* If the job is stopped, resume it */
+    if (job->state == JOB_STOPPED)
     {
-        perror("kill(SIGCONT)");
-        tcsetpgrp(STDIN_FILENO, shell_pgid);
-        return 1;
+        if (kill(-job->pgid, SIGCONT) < 0)
+        {
+            perror("kill(SIGCONT)");
+            tcsetpgrp(STDIN_FILENO, shell_pgid);
+            return 1;
+        }
+        job->state = JOB_RUNNING;
     }
 
-    job->state = JOB_RUNNING;
-
+    /* Wait for the job to finish or stop */
     int status;
     pid_t w;
     do
     {
-        w = waitpid(-job->pgid, &status, WUNTRACED | WCONTINUED);
+        w = waitpid(-job->pgid, &status, WUNTRACED);
         if (w < 0 && errno != EINTR)
         {
             perror("waitpid");
@@ -124,6 +124,7 @@ int builtin_fg(char **args)
     else if (w > 0 && (WIFEXITED(status) || WIFSIGNALED(status)))
         remove_job(job->pgid);
 
+    /* Restore shell as foreground process group */
     if (tcsetpgrp(STDIN_FILENO, shell_pgid) < 0)
         perror("tcsetpgrp restore");
 
@@ -149,6 +150,13 @@ int builtin_bg(char **args)
         fprintf(stderr, "bg: job %d not found\n", job_id);
         return 1;
     }
+
+    if (job->state == JOB_RUNNING)
+    {
+        printf("bg: job %d is already running in background\n", job_id);
+        return 0;
+    }
+
     if (job->state != JOB_STOPPED)
     {
         fprintf(stderr, "bg: job %d is not stopped\n", job_id);

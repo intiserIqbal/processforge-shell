@@ -4,7 +4,8 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     make \
     gdb \
-    valgrind
+    valgrind \
+    libreadline-dev
 
 WORKDIR /processforge
 
