@@ -16,8 +16,12 @@
 
 ---
 
-## Full Demo
+## Quick Demo
+[![5‑min Highlights](https://img.youtube.com/vi/vXK3Xti-A4A/0.jpg)](https://youtu.be/vXK3Xti-A4A)
 
+---
+
+## Full Demo
 [![Full Demo](https://img.youtube.com/vi/fzSygFkm2BE/0.jpg)](https://youtu.be/fzSygFkm2BE)
 
 > Walk through every feature: background jobs, signal handling, scheduler policies, priority changes, log viewer, and the interactive menu.
